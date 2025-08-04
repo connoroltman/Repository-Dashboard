@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Retractor Blade Pressure Map</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      text-align: center;
+    }
+
+    #grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 20px;
+      width: 400px;
+      margin: 50px auto;
+    }
+
+    .quadrant {
+      width: 150px;
+      height: 150px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      border-radius: 10px;
+      color: white;
+      font-weight: bold;
+    }
+
+    .green    { background: green; animation: none; }
+    .yellow   { background: gold;  animation: none; }
+    .red      { background: red;   animation: none; }
+    .flashing { background: red;   animation: flash 1s infinite; }
+
+    @keyframes flash {
+      0%, 100% { background-color: red; }
+      50%      { background-color: white; color: red; }
+    }
+  </style>
+</head>
+<body>
+  <h2>Retractor Pressure Quadrants</h2>
+  <button onclick="connect()">Connect to Puck.js</button>
+
+  <div id="grid">
+    <div id="q1" class="quadrant">0.00</div>
+    <div id="q2" class="quadrant">0.00</div>
+    <div id="q3" class="quadrant">0.00</div>
+    <div id="q4" class="quadrant">0.00</div>
+  </div>
+
+  <script>
+    async function connect() {
+      const device = await navigator.bluetooth.requestDevice({
+        filters: [{ services: ['180f'] }]
+      });
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService('180f');
+      const characteristic = await service.getCharacteristic('2a19');
+
+      characteristic.startNotifications();
+      characteristic.addEventListener('characteristicvaluechanged', event => {
+        const value = new TextDecoder().decode(event.target.value);
+        const values = value.split(',').map(parseFloat);
+        if (values.length === 4) updateQuadrants(values);
+      });
+    }
+
+    function updateQuadrants(values) {
+      values.forEach((v, i) => {
+        const q = document.getElementById(`q${i + 1}`);
+        q.textContent = v.toFixed(2);
+        q.className = 'quadrant ' + getColorClass(v);
+      });
+    }
+
+    function getColorClass(val) {
+      if (val <= 0.30) return 'green';
+      if (val <= 0.70) return 'yellow';
+      if (val <= 0.90) return 'red';
+      return 'flashing';
+    }
+  </script>
+</body>
+</html>
