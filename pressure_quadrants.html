@@ -57,6 +57,8 @@
   </div>
 
   <script>
+    let bluetoothDevice, nusService, rxCharacteristic;
+
     function setQuadrantColor(el, value) {
       el.classList.remove("flash");
 
@@ -71,33 +73,38 @@
       }
     }
 
-    function handleNotification(event) {
-      const value = new TextDecoder().decode(event.target.value);
-      const readings = value.split(',').map(parseFloat);
+    function handleData(data) {
+      const readings = data.trim().split(',').map(parseFloat);
       readings.forEach((val, idx) => {
         const el = document.getElementById("q" + idx);
-        el.textContent = val.toFixed(2);
-        setQuadrantColor(el, val);
+        if (el) {
+          el.textContent = val.toFixed(2);
+          setQuadrantColor(el, val);
+        }
       });
     }
 
     async function connect() {
       try {
-        const device = await navigator.bluetooth.requestDevice({
-          filters: [{ services: ['battery_service'] }]
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: 'Puck.js' }],
+          optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e'] // Nordic UART Service
         });
 
-        const server = await device.gatt.connect();
-        const service = await server.getPrimaryService('battery_service');
-        const characteristic = await service.getCharacteristic('2a19');
+        const server = await bluetoothDevice.gatt.connect();
+        nusService = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+        rxCharacteristic = await nusService.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
 
-        await characteristic.startNotifications();
-        characteristic.addEventListener('characteristicvaluechanged', handleNotification);
+        await rxCharacteristic.startNotifications();
+        rxCharacteristic.addEventListener('characteristicvaluechanged', event => {
+          const value = new TextDecoder().decode(event.target.value);
+          handleData(value);
+        });
 
-        alert("Connected to Puck.js and receiving data!");
-      } catch (err) {
-        alert("Failed to connect: " + err.message);
-        console.error(err);
+        alert("Connected to Puck.js!");
+      } catch (error) {
+        console.error(error);
+        alert("Failed to connect: " + error.message);
       }
     }
   </script>
