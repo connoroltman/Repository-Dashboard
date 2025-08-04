@@ -1,103 +1,105 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>Retractor Blade Force Monitor</title>
+  <title>Pressure Quadrants</title>
   <style>
     body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       font-family: sans-serif;
-      text-align: center;
-      background: #111;
-      color: white;
     }
-    .grid {
+
+    #grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
+      grid-template-columns: 150px 150px;
+      grid-template-rows: 150px 150px;
       gap: 10px;
-      max-width: 600px;
-      margin: auto;
-      margin-top: 40px;
+      margin-top: 30px;
     }
-    .quad {
-      height: 200px;
-      background: gray;
+
+    .quadrant {
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 2em;
-      transition: background 0.3s;
+      font-size: 1.2em;
+      font-weight: bold;
+      background-color: #ccc;
+      border-radius: 10px;
+      transition: background-color 0.3s;
     }
-    .flashing {
-      animation: flash 1s infinite alternate;
+
+    .flash {
+      animation: flash 0.6s infinite alternate;
     }
+
     @keyframes flash {
-      from { background: red; }
-      to { background: #440000; }
+      0% { background-color: red; }
+      100% { background-color: #ff8080; }
     }
+
     button {
       padding: 10px 20px;
+      font-size: 16px;
       margin-top: 20px;
-      font-size: 1.2em;
     }
   </style>
 </head>
 <body>
+  <h1>Force Sensor Visualization</h1>
+  <button onclick="connect()">Connect to Puck.js</button>
 
-  <h1>Retractor Force Monitor</h1>
-  <button onclick="connect()">🔗 Connect to Puck.js</button>
-
-  <div class="grid">
-    <div id="q1" class="quad">0.00</div>
-    <div id="q2" class="quad">0.00</div>
-    <div id="q3" class="quad">0.00</div>
-    <div id="q4" class="quad">0.00</div>
+  <div id="grid">
+    <div class="quadrant" id="q0">0.00</div>
+    <div class="quadrant" id="q1">0.00</div>
+    <div class="quadrant" id="q2">0.00</div>
+    <div class="quadrant" id="q3">0.00</div>
   </div>
 
   <script>
-    function updateQuadrants(values) {
-      values.forEach((val, i) => {
-        const q = document.getElementById('q' + (i + 1));
-        q.textContent = val.toFixed(2);
+    function setQuadrantColor(el, value) {
+      el.classList.remove("flash");
 
-        // Remove previous flashing
-        q.classList.remove('flashing');
+      if (value <= 0.3) {
+        el.style.backgroundColor = "green";
+      } else if (value <= 0.7) {
+        el.style.backgroundColor = "yellow";
+      } else if (value <= 0.9) {
+        el.style.backgroundColor = "red";
+      } else {
+        el.classList.add("flash");
+      }
+    }
 
-        // Apply color logic
-        if (val <= 0.3) q.style.background = "green";
-        else if (val <= 0.7) q.style.background = "yellow";
-        else if (val <= 0.9) q.style.background = "red";
-        else {
-          q.classList.add("flashing");
-        }
+    function handleNotification(event) {
+      const value = new TextDecoder().decode(event.target.value);
+      const readings = value.split(',').map(parseFloat);
+      readings.forEach((val, idx) => {
+        const el = document.getElementById("q" + idx);
+        el.textContent = val.toFixed(2);
+        setQuadrantColor(el, val);
       });
     }
 
     async function connect() {
       try {
         const device = await navigator.bluetooth.requestDevice({
-          filters: [{ services: ['0x180f'] }]
+          filters: [{ services: ['battery_service'] }]
         });
 
         const server = await device.gatt.connect();
-        const service = await server.getPrimaryService('0x180f');
+        const service = await server.getPrimaryService('battery_service');
         const characteristic = await service.getCharacteristic('2a19');
 
         await characteristic.startNotifications();
-        characteristic.addEventListener('characteristicvaluechanged', event => {
-          const value = new TextDecoder().decode(event.target.value);
-          const values = value.split(',').map(parseFloat);
-          if (values.length === 4) updateQuadrants(values);
-        });
+        characteristic.addEventListener('characteristicvaluechanged', handleNotification);
 
-        console.log("✅ Connected to Puck.js!");
-      } catch (error) {
-        console.error("❌ Error connecting:", error);
-        alert("Failed to connect: " + error.message);
+        alert("Connected to Puck.js and receiving data!");
+      } catch (err) {
+        alert("Failed to connect: " + err.message);
+        console.error(err);
       }
     }
   </script>
-
 </body>
 </html>
-
