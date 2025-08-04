@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <button onclick="connect()">Connect to any BLE device</button>
+    <script>
+      async function connect() {
+        try {
+          const device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true
+          });
+          console.log("✅ Found device:", device.name || device.id);
+          alert("Connected to: " + (device.name || device.id));
+        } catch (err) {
+          console.error("❌ Error:", err);
+          alert("Error: " + err.message);
+        }
+      }
+    </script>
+  </body>
+</html>
