@@ -2,58 +2,114 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Puck.js SpO₂ & Pressure Viewer</title>
+  <title>Puck.js Monitor</title>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #333; color: #eee; }
-    .reading { display: inline-block; width: 80px; height: 80px; margin: 10px; font-size: 24px;
-               background: #444; border-radius: 10px; line-height: 80px; }
-    #spo2 { font-size: 32px; margin: 20px 0; }
-    button { padding: 10px 20px; font-size: 16px; }
+    body {
+      background-color: #222;
+      color: white;
+      font-family: sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+    #container {
+      display: flex;
+      align-items: center;
+      gap: 40px;
+    }
+    #spo2-block {
+      text-align: center;
+    }
+    #spo2-block h1 {
+      font-size: 3em;
+      margin: 0;
+    }
+    #spo2 {
+      font-size: 2.5em;
+      font-weight: bold;
+    }
+    #grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-gap: 20px;
+    }
+    .tile {
+      background: #333;
+      padding: 30px;
+      border-radius: 10px;
+      font-size: 2em;
+      text-align: center;
+      width: 120px;
+      height: 120px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .label {
+      font-size: 1em;
+      color: #aaa;
+    }
+    #connectBtn {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      font-size: 1em;
+    }
   </style>
 </head>
 <body>
-  <h1>SpO₂: <span id="spo2">--</span>%</h1>
-  <div>
-    <div class="reading" id="p0">0.00</div>
-    <div class="reading" id="p1">0.00</div>
-    <div class="reading" id="p2">0.00</div>
-    <div class="reading" id="p3">0.00</div>
+  <div id="container">
+    <div id="spo2-block">
+      <h1>SpO₂</h1>
+      <div id="spo2">--%</div>
+    </div>
+    <div id="grid">
+      <div class="tile"><div class="label">P1</div><div id="p1">0.00</div></div>
+      <div class="tile"><div class="label">P2</div><div id="p2">0.00</div></div>
+      <div class="tile"><div class="label">P3</div><div id="p3">0.00</div></div>
+      <div class="tile"><div class="label">P4</div><div id="p4">0.00</div></div>
+    </div>
   </div>
-  <button onclick="connect()">Connect to Puck.js</button>
+  <button id="connectBtn">Connect to Puck.js</button>
 
   <script>
-    let port;
+    const spo2El = document.getElementById("spo2");
+    const pEls = [1, 2, 3, 4].map(i => document.getElementById("p" + i));
 
-    async function connect() {
+    document.getElementById("connectBtn").onclick = async function () {
       try {
         const device = await navigator.bluetooth.requestDevice({
-          filters: [{ namePrefix: "Puck.js" }],
-          optionalServices: [0x180a, 0x180f, "6e400001-b5a3-f393-e0a9-e50e24dcca9e"] // UART service
+          filters: [{ namePrefix: 'Puck.js' }],
+          optionalServices: [0x180F] // Generic service for visibility
         });
-
         const server = await device.gatt.connect();
-        const service = await server.getPrimaryService("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
-        const characteristic = await service.getCharacteristic("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
+        const service = await server.getPrimaryService(0x180F);
+        const char = await service.getCharacteristic(0x2A19);
 
-        characteristic.startNotifications();
-        characteristic.addEventListener("characteristicvaluechanged", event => {
+        await char.startNotifications();
+        char.addEventListener("characteristicvaluechanged", (event) => {
           const value = new TextDecoder().decode(event.target.value);
           try {
-            const json = JSON.parse(value);
-            document.getElementById("spo2").textContent = json.spo2;
-            for (let i = 0; i < 4; i++) {
-              document.getElementById("p" + i).textContent = json.pressures[i].toFixed(2);
+            const data = JSON.parse(value);
+            if (data.spo2 != null) spo2El.textContent = data.spo2 + "%";
+            if (data.pressures) {
+              data.pressures.forEach((p, i) => {
+                if (pEls[i]) pEls[i].textContent = p.toFixed(2);
+              });
             }
           } catch (e) {
-            console.error("Parse error:", value);
+            console.error("Bad data", value);
           }
         });
-
-        alert("Connected to Puck.js!");
       } catch (e) {
-        alert("Connection failed: " + e);
+        alert("Connection error: " + e);
       }
-    }
+    };
   </script>
 </body>
 </html>
