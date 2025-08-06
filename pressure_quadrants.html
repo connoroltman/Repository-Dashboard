@@ -1,85 +1,53 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Puck.js Dashboard</title>
+  <title>Vitals Dashboard</title>
   <style>
-    body {
-      font-family: sans-serif;
-      text-align: center;
-      background: #f5f5f5;
-    }
-    #grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      justify-content: center;
-      margin-top: 20px;
-    }
-    .quadrant {
-      background-color: #ddd;
-      padding: 40px;
-      border-radius: 10px;
-      font-size: 24px;
-      font-weight: bold;
-    }
-    #spo2 {
-      font-size: 32px;
-      margin-top: 30px;
-    }
-    button {
-      margin-top: 20px;
-      padding: 12px 24px;
-      font-size: 16px;
-    }
+    body { font-family: sans-serif; text-align: center; background: #f0f0f0; }
+    h1 { margin-top: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(2, 120px); gap: 15px; justify-content: center; margin-top: 20px; }
+    .cell { background: #fff; border-radius: 8px; padding: 30px; font-size: 24px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+    button { padding: 10px 20px; font-size: 16px; margin-top: 30px; }
   </style>
 </head>
 <body>
-  <h1>Connect to Puck.js</h1>
-  <button onclick="connect()">Connect to Puck.js</button>
-  <div id="spo2">SpO₂: --%</div>
-
-  <div id="grid">
-    <div class="quadrant" id="q0">0.00</div>
-    <div class="quadrant" id="q1">0.00</div>
-    <div class="quadrant" id="q2">0.00</div>
-    <div class="quadrant" id="q3">0.00</div>
+  <h1>SpO<sub>2</sub>: <span id="spo2">--</span>%</h1>
+  <div class="grid">
+    <div class="cell" id="p0">0.00</div>
+    <div class="cell" id="p1">0.00</div>
+    <div class="cell" id="p2">0.00</div>
+    <div class="cell" id="p3">0.00</div>
   </div>
+  <button onclick="connect()">Connect to Puck.js</button>
 
   <script>
     async function connect() {
       try {
         const device = await navigator.bluetooth.requestDevice({
           filters: [{ namePrefix: 'Puck.js' }],
-          optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+          optionalServices: [0x180F] // Battery service (required for Web Bluetooth)
         });
 
         const server = await device.gatt.connect();
-        const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-        const rxChar = await service.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e'); // RX from Puck
+        const uartService = await server.getPrimaryService("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
+        const rxChar = await uartService.getCharacteristic("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
 
         await rxChar.startNotifications();
-        rxChar.addEventListener("characteristicvaluechanged", event => {
-          const text = new TextDecoder().decode(event.target.value);
+        rxChar.addEventListener('characteristicvaluechanged', event => {
+          const value = new TextDecoder().decode(event.target.value);
           try {
-            const data = JSON.parse(text.trim());
-            if (data.spo2 !== undefined) {
-              document.getElementById("spo2").textContent = `SpO₂: ${data.spo2}%`;
-            }
-            if (data.pressures) {
-              data.pressures.forEach((val, i) => {
-                const el = document.getElementById("q" + i);
-                el.textContent = val.toFixed(2);
-                el.style.backgroundColor = val > 0.9 ? "red" : val > 0.5 ? "yellow" : "#b2fab4";
-              });
-            }
+            const data = JSON.parse(value);
+            document.getElementById("spo2").textContent = data.spo2;
+            data.pressures.forEach((p, i) => {
+              document.getElementById(`p${i}`).textContent = p.toFixed(2);
+            });
           } catch (e) {
-            console.warn("Bad JSON:", text);
+            console.warn("Invalid data:", value);
           }
         });
-
-      } catch (error) {
-        alert("Failed to connect: " + error.message);
+      } catch (e) {
+        alert("Connection error: " + e);
+        console.error(e);
       }
     }
   </script>
