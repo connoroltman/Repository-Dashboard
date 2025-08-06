@@ -2,56 +2,56 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Puck.js Sensor Dashboard</title>
+  <title>Puck.js SpO₂ & Pressure Viewer</title>
   <style>
-    body { font-family: sans-serif; text-align: center; background: #f4f4f4; }
-    .spo2 { font-size: 2em; margin: 20px 0; }
-    .pressure-grid { display: grid; grid-template-columns: repeat(2, 100px); gap: 20px; justify-content: center; }
-    .pressure-box { background: #333; color: #fff; font-size: 1.5em; padding: 20px; border-radius: 10px; }
-    button { margin-top: 20px; padding: 10px 20px; font-size: 1em; }
+    body { font-family: sans-serif; text-align: center; background: #333; color: #eee; }
+    .reading { display: inline-block; width: 80px; height: 80px; margin: 10px; font-size: 24px;
+               background: #444; border-radius: 10px; line-height: 80px; }
+    #spo2 { font-size: 32px; margin: 20px 0; }
+    button { padding: 10px 20px; font-size: 16px; }
   </style>
 </head>
 <body>
-  <h1>SpO<sub>2</sub>: <span id="spo2">--</span>%</h1>
-  <div class="pressure-grid">
-    <div class="pressure-box" id="p0">0.00</div>
-    <div class="pressure-box" id="p1">0.00</div>
-    <div class="pressure-box" id="p2">0.00</div>
-    <div class="pressure-box" id="p3">0.00</div>
+  <h1>SpO₂: <span id="spo2">--</span>%</h1>
+  <div>
+    <div class="reading" id="p0">0.00</div>
+    <div class="reading" id="p1">0.00</div>
+    <div class="reading" id="p2">0.00</div>
+    <div class="reading" id="p3">0.00</div>
   </div>
   <button onclick="connect()">Connect to Puck.js</button>
 
   <script>
+    let port;
+
     async function connect() {
       try {
         const device = await navigator.bluetooth.requestDevice({
-          filters: [{ name: 'Puck.js' }],
-          optionalServices: [0x180f]  // Generic service to satisfy requirement
+          filters: [{ namePrefix: "Puck.js" }],
+          optionalServices: [0x180a, 0x180f, "6e400001-b5a3-f393-e0a9-e50e24dcca9e"] // UART service
         });
 
         const server = await device.gatt.connect();
-        const service = await server.getPrimaryService(0x180f); // Dummy service
-        const tx = await service.getCharacteristic(0x2a19); // Dummy characteristic
+        const service = await server.getPrimaryService("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
+        const characteristic = await service.getCharacteristic("6e400003-b5a3-f393-e0a9-e50e24dcca9e");
 
-        // Use Nordic UART fallback
-        const uart = await device.gatt.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-        const rx = await uart.getCharacteristic('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
-
-        await rx.startNotifications();
-        rx.addEventListener('characteristicvaluechanged', event => {
-          const val = new TextDecoder().decode(event.target.value);
+        characteristic.startNotifications();
+        characteristic.addEventListener("characteristicvaluechanged", event => {
+          const value = new TextDecoder().decode(event.target.value);
           try {
-            const data = JSON.parse(val);
-            document.getElementById("spo2").textContent = data.spo2;
-            data.pressures.forEach((v, i) => {
-              document.getElementById("p" + i).textContent = v.toFixed(2);
-            });
+            const json = JSON.parse(value);
+            document.getElementById("spo2").textContent = json.spo2;
+            for (let i = 0; i < 4; i++) {
+              document.getElementById("p" + i).textContent = json.pressures[i].toFixed(2);
+            }
           } catch (e) {
-            console.error("Parse error:", e);
+            console.error("Parse error:", value);
           }
         });
+
+        alert("Connected to Puck.js!");
       } catch (e) {
-        alert("Connection error: " + e.message);
+        alert("Connection failed: " + e);
       }
     }
   </script>
